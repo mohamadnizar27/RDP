@@ -3,14 +3,34 @@ name: RDP + Tailscale (Workflow 2)
 on:
   workflow_dispatch:
     inputs:
-      ts_tailnet:      { description: "Tailscale tailnet", required: true }
-      ts_api_key:      { description: "Tailscale API key", required: true }
-      ts_authkey:      { description: "Tailscale Auth key", required: true }
-      quick_test:      { description: "Run 5-min test", type: boolean, default: false }
-      runtime_minutes: { description: "Runtime", required: false, default: "355" }
-      do_purge:        { description: "Purge nizar devices", required: false, default: "true" }
-      rdp_count:       { description: "RDP count", required: false, default: "1" }
-      cycles_left:     { description: "Cycles remaining", required: true }
+      ts_tailnet:
+        description: "Tailscale tailnet"
+        required: true
+      ts_api_key:
+        description: "Tailscale API key"
+        required: true
+      ts_authkey:
+        description: "Tailscale Auth key"
+        required: true
+      quick_test:
+        description: "Run 5-min test"
+        type: boolean
+        default: false
+      runtime_minutes:
+        description: "Runtime"
+        required: false
+        default: "355"
+      do_purge:
+        description: "Purge nizar devices"
+        required: false
+        default: "true"
+      rdp_count:
+        description: "RDP count"
+        required: false
+        default: "1"
+      cycles_left:
+        description: "Cycles remaining"
+        required: true
 
 permissions:
   contents: read
@@ -24,39 +44,60 @@ jobs:
   run-rdp:
     runs-on: windows-latest
     timeout-minutes: 370
+
     env:
       RDP_USER: Nizarcartenz
       RDP_PASS: Nizar@12345
 
     steps:
+
       - name: Setup Tailscale + RDP
         run: |
           $ts="$env:ProgramFiles\Tailscale\tailscale.exe"
+
           if(-not(Test-Path $ts)){
             $url="https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
             $dst="$env:TEMP\tailscale.msi"
+
             Invoke-WebRequest $url -OutFile $dst
-            Start-Process msiexec.exe -ArgumentList "/i","`"$dst`"","/quiet","/norestart" -Wait
+
+            Start-Process msiexec.exe `
+              -ArgumentList "/i","`"$dst`"","/quiet","/norestart" `
+              -Wait
           }
-          & $ts up --authkey "${{ inputs.ts_authkey }}" --hostname "nizar2" --accept-dns=true
+
+          & $ts up --authkey "${{ inputs.ts_authkey }}" `
+                   --hostname "nizar2" `
+                   --accept-dns=true
+
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          
-        - name: Enable RDP User
-           run: |
-          $u=$env:RDP_USER
-          $p=$env:RDP_PASS
-          $s=ConvertTo-SecureString $p -AsPlainText -Force
 
-           if(-not(Get-LocalUser -Name $u -EA SilentlyContinue)){
-           New-LocalUser -Name $u -Password $s -AccountNeverExpires
-           Add-LocalGroupMember -Group "Administrators" -Member $u
-           Add-LocalGroupMember -Group "Remote Desktop Users" -Member $u
-    }
+      - name: Enable RDP User
+        run: |
+          $u = $env:RDP_USER
+          $p = $env:RDP_PASS
 
-    Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" fDenyTSConnections 0
-    Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          $s = ConvertTo-SecureString $p -AsPlainText -Force
 
-    Write-Host "RDP ready: $u"
+          if(-not(Get-LocalUser -Name $u -ErrorAction SilentlyContinue)){
+            New-LocalUser -Name $u -Password $s -AccountNeverExpires
+
+            Add-LocalGroupMember `
+              -Group "Administrators" `
+              -Member $u
+
+            Add-LocalGroupMember `
+              -Group "Remote Desktop Users" `
+              -Member $u
+          }
+
+          Set-ItemProperty `
+            "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
+            fDenyTSConnections 0
+
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+          Write-Host "RDP ready: $u"
 
       - name: Install Python libs
         run: |
@@ -67,12 +108,18 @@ jobs:
         run: |
           $rt=[int]"${{ inputs.runtime_minutes }}"
           $end=(Get-Date).AddMinutes($rt)
-          while((Get-Date) -lt $end){Write-Host ("Workflow2 heartbeat "+(Get-Date));Start-Sleep 60}
+
+          while((Get-Date) -lt $end){
+            Write-Host ("Workflow2 heartbeat " + (Get-Date))
+            Start-Sleep 60
+          }
 
       - name: Dispatch STOP workflow
         if: always()
+
         env:
           GH_TOKEN: ${{ github.token }}
+
         run: |
           $payload=@{
             ts_tailnet="${{ inputs.ts_tailnet }}"
@@ -84,8 +131,23 @@ jobs:
             rdp_count="${{ inputs.rdp_count }}"
             cycles_left="${{ inputs.cycles_left }}"
           }
+
           $url="https://api.github.com/repos/${{ github.repository }}/actions/workflows/workflow-stop.yml/dispatches"
-          $hdr=@{Authorization="Bearer $env:GH_TOKEN";Accept="application/vnd.github+json"}
-          $body=@{ref="${{ github.ref_name }}";inputs=$payload}|ConvertTo-Json -Depth 20
-          Invoke-WebRequest -Method POST -Uri $url -Headers $hdr -Body $body|Out-Null
-          Write-Host "ðŸ›‘ STOP workflow triggered (cycles left: ${{ inputs.cycles_left }})"
+
+          $hdr=@{
+            Authorization="Bearer $env:GH_TOKEN"
+            Accept="application/vnd.github+json"
+          }
+
+          $body=@{
+            ref="${{ github.ref_name }}"
+            inputs=$payload
+          } | ConvertTo-Json -Depth 20
+
+          Invoke-WebRequest `
+            -Method POST `
+            -Uri $url `
+            -Headers $hdr `
+            -Body $body | Out-Null
+
+          Write-Host "STOP workflow triggered (cycles left: ${{ inputs.cycles_left }})"
