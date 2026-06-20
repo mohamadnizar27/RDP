@@ -40,6 +40,23 @@ jobs:
           }
           & $ts up --authkey "${{ inputs.ts_authkey }}" --hostname "nizar2" --accept-dns=true
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          
+        - name: Enable RDP User
+           run: |
+          $u=$env:RDP_USER
+          $p=$env:RDP_PASS
+          $s=ConvertTo-SecureString $p -AsPlainText -Force
+
+           if(-not(Get-LocalUser -Name $u -EA SilentlyContinue)){
+           New-LocalUser -Name $u -Password $s -AccountNeverExpires
+           Add-LocalGroupMember -Group "Administrators" -Member $u
+           Add-LocalGroupMember -Group "Remote Desktop Users" -Member $u
+    }
+
+    Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" fDenyTSConnections 0
+    Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+    Write-Host "RDP ready: $u"
 
       - name: Install Python libs
         run: |
@@ -71,4 +88,4 @@ jobs:
           $hdr=@{Authorization="Bearer $env:GH_TOKEN";Accept="application/vnd.github+json"}
           $body=@{ref="${{ github.ref_name }}";inputs=$payload}|ConvertTo-Json -Depth 20
           Invoke-WebRequest -Method POST -Uri $url -Headers $hdr -Body $body|Out-Null
-          Write-Host "🛑 STOP workflow triggered (cycles left: ${{ inputs.cycles_left }})"
+          Write-Host "ðŸ›‘ STOP workflow triggered (cycles left: ${{ inputs.cycles_left }})"
