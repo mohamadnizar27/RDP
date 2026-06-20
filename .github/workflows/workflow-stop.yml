@@ -45,17 +45,17 @@ jobs:
         run: |
           $left=[int]"${{ inputs.cycles_left }}"
           if($left -le 0){
-            Write-Host "✅ 5 cycles completed. Stopping permanently."
+            Write-Host "✅ No cycles remaining. Stopping permanently."
             "RESTART=0"|Out-File -Append $env:GITHUB_ENV
           }else{
-            Write-Host "⏳ Waiting 20 min before restarting Workflow 1. Cycles left: $left"
+            Write-Host "⏳ Waiting 2 min before restarting Workflow 1. Cycles left: $left"
             "RESTART=1"|Out-File -Append $env:GITHUB_ENV
           }
 
-      - name: Wait 20 minutes (if restarting)
+      - name: Wait 2 minutes (if restarting)
         if: env.RESTART == '1'
         run: |
-          $end=(Get-Date).AddMinutes(20)
+          $end=(Get-Date).AddMinutes(2)
           while((Get-Date) -lt $end){Write-Host ("🕒 Cooling down "+(Get-Date));Start-Sleep 60}
 
       - name: Restart Workflow 1 (if cycles remain)
@@ -63,7 +63,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $next=[int]"${{ inputs.cycles_left }}"-1
+          $next = ([int]"${{ inputs.cycles_left }}") - 1
           if($next -le 0){Write-Host "✅ Finished all cycles.";exit 0}
           $payload=@{
             ts_tailnet="${{ inputs.ts_tailnet }}"
